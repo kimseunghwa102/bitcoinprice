@@ -10,10 +10,10 @@
             background: url('https://cdn.pixabay.com/photo/2017/11/07/00/07/bitcoin-2925931_1280.jpg') no-repeat center center fixed;
             background-size: cover;
             margin: 0;
-            padding: 2vw; /* 모바일에서도 여백 유지 */
+            padding: 2vw;
             color: #333;
             position: relative;
-            min-height: 100vh; /* 전체 높이 보장 */
+            min-height: 100vh;
         }
         body::before {
             content: '';
@@ -29,13 +29,13 @@
             text-align: center;
             color: #f1c40f;
             margin: 0 0 3vw 0;
-            font-size: calc(1.5em + 1vw); /* 화면 크기에 따라 조정 */
+            font-size: calc(1.5em + 1vw);
             text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
             letter-spacing: 1px;
             line-height: 1.3;
         }
         .container {
-            max-width: 90%; /* 모바일에서 너무 좁지 않게 */
+            max-width: 90%;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.9);
             padding: 3vw;
@@ -52,7 +52,7 @@
         }
         .data-item {
             flex: 1;
-            min-width: 45%; /* 모바일에서 2열 유지, 작아지면 1열로 */
+            min-width: 45%;
             background: #ecf0f1;
             padding: 2vw;
             border-radius: 10px;
@@ -84,11 +84,19 @@
             word-wrap: break-word;
             line-height: 1.2;
         }
+        .chart-container {
+            margin-top: 3vw;
+            padding: 2vw;
+            background: #ecf0f1;
+            border-radius: 10px;
+            height: 50vh;
+            position: relative;
+        }
         .refresh-btn {
             display: block;
-            width: 40%; /* 모바일에서 적당히 */
+            width: 40%;
             max-width: 150px;
-            margin: 3vw auto 0;
+            margin: 1vw auto 0;
             padding: 1.5vw;
             background-color: #3498db;
             color: #fff;
@@ -113,10 +121,9 @@
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
             letter-spacing: 0.5px;
         }
-        /* 모바일 반응형 */
         @media (max-width: 768px) {
             .data-item {
-                min-width: 100%; /* 태블릿 이하에서 1열로 */
+                min-width: 100%;
             }
             h1 {
                 font-size: calc(1.2em + 1vw);
@@ -124,6 +131,10 @@
             .refresh-btn {
                 width: 50%;
                 padding: 2vw;
+            }
+            .chart-container {
+                height: 40vh;
+                padding: 3vw;
             }
         }
         @media (max-width: 480px) {
@@ -142,6 +153,30 @@
             .refresh-btn {
                 width: 60%;
             }
+            .chart-container {
+                height: 30vh;
+                padding: 4vw;
+            }
+        }
+        /* 모달 스타일 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-canvas {
+            width: 90%;
+            height: 80%;
+            max-width: 800px;
+            background: #fff;
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -152,31 +187,36 @@
             <div class="data-item">
                 <div class="label-en">Bitcoin Market Cap</div>
                 <div class="label-kr">비트코인 시가총액</div>
-                <span class="value" id="bitcoin-market-cap">Loading...</span>
+                <span class="value" id="bitcoin-market-cap">로딩 중...</span>
             </div>
             <div class="data-item">
                 <div class="label-en">Gold Market Cap</div>
                 <div class="label-kr">금 시가총액</div>
-                <span class="value" id="gold-market-cap">Loading...</span>
+                <span class="value" id="gold-market-cap">로딩 중...</span>
             </div>
             <div class="data-item">
                 <div class="label-en">Rising Multiple to Surpass Gold</div>
                 <div class="label-kr">몇 배 올라야 금 시총 넘어?</div>
-                <span class="value" id="multiplier">Loading...</span>
+                <span class="value" id="multiplier">로딩 중...</span>
             </div>
             <div class="data-item">
                 <div class="label-en">Last Updated</div>
                 <div class="label-kr">마지막 업데이트</div>
-                <span class="value" id="last-updated">Loading...</span>
+                <span class="value" id="last-updated">로딩 중...</span>
             </div>
         </div>
-        <button class="refresh-btn" onclick="fetchData()">Refresh | 새로고침</button>
+        <div class="chart-container">
+            <canvas id="marketCapChart"></canvas>
+        </div>
+        <button class="refresh-btn" onclick="fetchData()">새로고침</button>
+        <button class="refresh-btn" onclick="openChartModal()">차트 크게 보기</button>
         <div class="footer">제작: @bitcoinisnotall</div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         const bitcoinUrl = 'https://api.coingecko.com/api/v3/coins/bitcoin';
-        const goldApiKey = 'goldapi-9qohsm7q74j16-io'; 
+        const goldApiKey = 'goldapi-9qohsm7q74j16-io'; // 실제 API 키로 교체 필요
         const goldUrl = 'https://www.goldapi.io/api/XAU/USD';
 
         const goldHeaders = new Headers();
@@ -187,6 +227,14 @@
             method: 'GET',
             headers: goldHeaders,
             redirect: 'follow'
+        };
+
+        let chartInstance = null;
+
+        const historicalData = {
+            labels: ['2023-03', '2023-06', '2023-09', '2023-12', '2024-03', '2024-06', '2024-09', '2024-12', '2025-03'],
+            bitcoin: [600e9, 650e9, 700e9, 800e9, 900e9, 1e12, 1.2e12, 1.5e12, 0],
+            gold: [12e12, 12.2e12, 12.5e12, 12.8e12, 13e12, 13.5e12, 14e12, 14.5e12, 0]
         };
 
         function fetchData() {
@@ -209,11 +257,176 @@
                 document.getElementById('gold-market-cap').textContent = formatNumber(goldMarketCap);
                 document.getElementById('multiplier').textContent = multiplier.toFixed(2);
                 document.getElementById('last-updated').textContent = new Date().toLocaleString('ko-KR');
+
+                historicalData.bitcoin[historicalData.bitcoin.length - 1] = bitcoinMarketCap;
+                historicalData.gold[historicalData.gold.length - 1] = goldMarketCap;
+                updateChart();
             })
             .catch(error => {
                 console.error('데이터 가져오기 실패:', error);
                 alert('데이터를 가져오지 못했습니다. 다시 시도해주세요.');
             });
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('marketCapChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: historicalData.labels,
+                    datasets: [
+                        {
+                            label: '비트코인 시가총액 (USD)',
+                            data: historicalData.bitcoin,
+                            borderColor: '#f1c40f',
+                            backgroundColor: 'rgba(241, 196, 15, 0.2)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: '금 시가총액 (USD)',
+                            data: historicalData.gold,
+                            borderColor: '#2980b9',
+                            backgroundColor: 'rgba(41, 128, 185, 0.2)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '시가총액 (USD)',
+                                font: { size: window.innerWidth < 480 ? 10 : 14 }
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + (value / 1e12).toFixed(2) + '조';
+                                },
+                                font: { size: window.innerWidth < 480 ? 8 : 12 }
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '날짜',
+                                font: { size: window.innerWidth < 480 ? 10 : 14 }
+                            },
+                            ticks: {
+                                font: { size: window.innerWidth < 480 ? 8 : 12 },
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { font: { size: window.innerWidth < 480 ? 10 : 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    label += '$' + (context.parsed.y / 1e12).toFixed(2) + '조';
+                                    return label;
+                                }
+                            },
+                            bodyFont: { size: window.innerWidth < 480 ? 10 : 12 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function openChartModal() {
+            // 모달 생성
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+
+            // 캔버스 컨테이너 생성
+            const canvasContainer = document.createElement('div');
+            canvasContainer.className = 'modal-canvas';
+
+            // 캔버스 생성 및 크기 명시적 설정
+            const canvas = document.createElement('canvas');
+            canvas.id = 'modalChart';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+
+            // 모달에 추가
+            canvasContainer.appendChild(canvas);
+            modal.appendChild(canvasContainer);
+            document.body.appendChild(modal);
+
+            // 차트 렌더링
+            const ctx = canvas.getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: chartInstance.data, // 기존 데이터 재사용
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '시가총액 (USD)',
+                                font: { size: 16 } // 모달에서는 고정 크기
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + (value / 1e12).toFixed(2) + '조';
+                                },
+                                font: { size: 14 }
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '날짜',
+                                font: { size: 16 }
+                            },
+                            ticks: {
+                                font: { size: 14 },
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { font: { size: 14 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    label += '$' + (context.parsed.y / 1e12).toFixed(2) + '조';
+                                    return label;
+                                }
+                            },
+                            bodyFont: { size: 14 }
+                        }
+                    }
+                }
+            });
+
+            // 모달 닫기
+            modal.onclick = () => {
+                modal.remove();
+            };
         }
 
         fetchData();
